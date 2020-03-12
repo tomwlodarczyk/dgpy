@@ -103,18 +103,29 @@ def plot_dg(field, domain, show_element_boundaries=True, show_collocation_points
             ax = fig.add_subplot(111, projection='3d')
         in_e_id = int(slice_index / domain.num_points[slice_dim])
         i = slice_index % domain.num_points[slice_dim]
+        u_min = None
+        u_max = None
         for e_id, e in domain.indexed_elements.items():
             if e_id[slice_dim] != in_e_id:
                 continue
             x_d = np.mean(e.inertial_coords[slice_dim].take(i, axis=slice_dim))
+            # e.inertial_coords has shape (dim, num_points_x, num_points_z, num_points_z)
+            # First, we delete the coordinate slice_dim (i.e. x, y or z)
             x = np.delete(e.inertial_coords, slice_dim, axis=0).take(i, axis=1 + slice_dim)
-            u = np.take(getattr(e, field), i, axis=slice_dim)
+            u = getattr(e, field)
+            if field_slice is not None:
+                u = u[field_slice]
+            assert u.ndim == e.dim, "You can only plot scalars as surfaces. Use field_slice, e.g. np.s_[0] for the x-component of a vector field"
+            u = np.take(u, i, axis=slice_dim)
+            if u_min is None or u_min > np.min(u):
+                u_min = np.min(u)
+            if u_max is None or u_max < np.max(u):
+                u_max = np.max(u)
             ax.plot_surface(*x, u)
         x_labels = ["x", "y", "z"]
         plt.title("Slice through ${}={:.2f}$".format(x_labels[slice_dim], x_d))
-        u_all = domain.get_data(field)
-        if np.min(u_all) != np.max(u_all):
-            ax.set_zlim(np.min(u_all), np.max(u_all))
+        if u_min != u_max:
+            ax.set_zlim(u_min, u_max)
         ax.set_xlabel(np.delete(x_labels, slice_dim)[0])
         ax.set_ylabel(np.delete(x_labels, slice_dim)[1])
         ax.set_zlabel(field)
